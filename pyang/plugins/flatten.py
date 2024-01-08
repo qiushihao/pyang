@@ -87,7 +87,7 @@ def typestring(node):
     elif t.arg == 'leafref':
         target_node = node.i_leafref.i_target_node
         # print(node.i_leafref.i_target_node.search_one('type'))
-        s = 'leafref: ' + typestring(target_node)
+        s = str(target_node) + typestring(target_node)
 
     elif t.arg == 'union':
         uniontypes = t.search('type')
