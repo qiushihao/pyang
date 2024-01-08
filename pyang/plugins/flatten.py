@@ -71,6 +71,71 @@ import csv
 from pyang import plugin
 from pyang import statements, types
 
+def typestring(self, node):
+    t = node.search_one('type')
+    try:
+        s = t.arg
+    except AttributeError:
+        return t
+
+    if t.arg == 'enumeration':
+        s = s + ' : {'
+        for enums in t.substmts:
+            s = s + enums.arg + ','
+        s = s + '}'
+    elif t.arg == 'leafref':
+        s = s
+    elif t.arg == 'identityref':
+        b = t.search_one('base')
+        if b is not None:
+            s = s + ' {' + b.arg + '}'
+            if self.ctx_identityrefs and self.ctx_identities:
+                baseid = b.arg
+                if ':' not in baseid:
+                    # if no prefix found, it must be defined in this module, so add this module's prefix
+                    baseid = self.thismod_prefix + ':' + baseid
+
+                if baseid not in self.baseid:
+                    self.baseid.append(baseid)
+
+                if node.keyword == 'typedef':
+                    keyword = self.make_plantuml_keyword(self.thismod_prefix) + '_' + self.make_plantuml_keyword(node.arg) + '_typedef'
+                else:
+                    keyword = self.full_path(node.parent)
+
+                # add a relation to the baseid:
+                # if baseid is defined in this module, then an identity class will have been defined in this module and
+                # if baseid is not in an input module, then function post_process_module() will then add a placeholder class for the identity
+                # in both the above cases the keyword will be then same
+                # if baseid is in another input module, then an identity class will have been defined there (with the same keyword), in which case the relation must be defined outside of the module packages
+                prefix, _ = util.split_identifier(baseid)
+                if prefix == self.thismod_prefix or prefix not in self.module_prefixes:
+                    self.post_strings.append(keyword + '-->' + self.make_plantuml_keyword(baseid) + '_identity : ' + node.arg + '\n')
+                else:
+                    self.end_strings.append(keyword + '-->' + self.make_plantuml_keyword(baseid) + '_identity : ' + node.arg + '\n')
+
+
+    elif t.arg == 'union':
+        uniontypes = t.search('type')
+        s = s + '{' + uniontypes[0].arg
+        for uniontype in uniontypes:
+            s = s + ', ' + uniontype.arg
+            s = s + '}'
+
+
+    typerange = t.search_one('range')
+    if typerange is not None:
+        s = s + ' [' + typerange.arg + ']'
+    length = t.search_one('length')
+    if length is not None:
+        s = s + ' {length = ' + length.arg + '}'
+
+    pattern = t.search_one('pattern')
+    if pattern is not None: # truncate long patterns
+        s = s + ' {pattern = ' + pattern.arg
+        s = s + '}'
+
+    return s
 
 def pyang_plugin_init():
     plugin.register_plugin(FlattenPlugin())
