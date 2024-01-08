@@ -71,12 +71,13 @@ import csv
 from pyang import plugin
 from pyang import statements, types
 
-def typestring(self, node):
+
+def typestring(node):
     t = node.search_one('type')
     try:
         s = t.arg
     except AttributeError:
-        return t
+        return 'None'
 
     if t.arg == 'enumeration':
         s = s + ' : {'
@@ -84,36 +85,9 @@ def typestring(self, node):
             s = s + enums.arg + ','
         s = s + '}'
     elif t.arg == 'leafref':
-        s = s
-    elif t.arg == 'identityref':
-        b = t.search_one('base')
-        if b is not None:
-            s = s + ' {' + b.arg + '}'
-            if self.ctx_identityrefs and self.ctx_identities:
-                baseid = b.arg
-                if ':' not in baseid:
-                    # if no prefix found, it must be defined in this module, so add this module's prefix
-                    baseid = self.thismod_prefix + ':' + baseid
-
-                if baseid not in self.baseid:
-                    self.baseid.append(baseid)
-
-                if node.keyword == 'typedef':
-                    keyword = self.make_plantuml_keyword(self.thismod_prefix) + '_' + self.make_plantuml_keyword(node.arg) + '_typedef'
-                else:
-                    keyword = self.full_path(node.parent)
-
-                # add a relation to the baseid:
-                # if baseid is defined in this module, then an identity class will have been defined in this module and
-                # if baseid is not in an input module, then function post_process_module() will then add a placeholder class for the identity
-                # in both the above cases the keyword will be then same
-                # if baseid is in another input module, then an identity class will have been defined there (with the same keyword), in which case the relation must be defined outside of the module packages
-                prefix, _ = util.split_identifier(baseid)
-                if prefix == self.thismod_prefix or prefix not in self.module_prefixes:
-                    self.post_strings.append(keyword + '-->' + self.make_plantuml_keyword(baseid) + '_identity : ' + node.arg + '\n')
-                else:
-                    self.end_strings.append(keyword + '-->' + self.make_plantuml_keyword(baseid) + '_identity : ' + node.arg + '\n')
-
+        target_node = node.i_leafref.i_target_node
+        # print(node.i_leafref.i_target_node.search_one('type'))
+        s = 'leafref: ' + typestring(target_node)
 
     elif t.arg == 'union':
         uniontypes = t.search('type')
@@ -136,6 +110,7 @@ def typestring(self, node):
         s = s + '}'
 
     return s
+
 
 def pyang_plugin_init():
     plugin.register_plugin(FlattenPlugin())
@@ -404,8 +379,10 @@ class FlattenPlugin(plugin.PyangPlugin):
         if ctx.opts.flatten_keyword:
             output_content["keyword"] = child.keyword
         if ctx.opts.flatten_type:
+            print(typestring(child))
             output_content["type"] = (
-                statements.get_qualified_type(child) or "nil"
+                    typestring(child)
+                    # statements.get_qualified_type(child) or "nil"
             )
         if ctx.opts.flatten_primitive_type:
             output_content["primitive_type"] = primitive_type
